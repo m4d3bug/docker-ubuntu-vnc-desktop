@@ -1,6 +1,3 @@
-from __future__ import (
-    absolute_import, division, print_function, with_statement
-)
 from os import environ
 from gevent.event import Event
 from gevent import subprocess as gsp
@@ -31,7 +28,7 @@ class State(object):
         output = gsp.check_output([
             'supervisorctl', '-c', '/etc/supervisor/supervisord.conf',
             'status'
-        ])
+        ]).decode('utf-8')
         for line in output.strip().split('\n'):
             if not line.startswith('web') and line.find('RUNNING') < 0:
                 health = False

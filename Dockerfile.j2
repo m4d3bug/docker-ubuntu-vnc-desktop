@@ -5,6 +5,8 @@
 ################################################################################
 {%if arch == "amd64"%}
 FROM {{image}} as system
+{%elif arch == "arm64"%}
+FROM arm64v8/{{image}} as system
 {%elif arch == "armhf"%}
 # qemu helper for arm build
 FROM {{image}} as amd64
@@ -13,77 +15,74 @@ FROM arm32v7/{{image}} as system
 COPY --from=amd64 /usr/bin/qemu-arm-static /usr/bin/
 {%endif%}
 
-RUN sed -i 's#http://archive.ubuntu.com/ubuntu/#mirror://mirrors.ubuntu.com/mirrors.txt#' /etc/apt/sources.list; 
-
 # built-in packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt update \
-    && apt install -y --no-install-recommends software-properties-common curl apache2-utils \
-    && apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends software-properties-common curl apache2-utils \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         supervisor nginx sudo net-tools zenity xz-utils \
         dbus-x11 x11-utils alsa-utils \
         mesa-utils libgl1-mesa-dri \
-    && apt autoclean -y \
-    && apt autoremove -y \
+    && apt-get autoclean -y \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 # install debs error if combine together
-RUN add-apt-repository -y ppa:fcwu-tw/apps \
-    && apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
-        xvfb x11vnc=0.9.16-1 \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        xvfb x11vnc \
         {%for package in addon_packages%}{{package}} {%endfor%} \
-    && add-apt-repository -r ppa:fcwu-tw/apps \
-    && apt autoclean -y \
-    && apt autoremove -y \
+    && apt-get autoclean -y \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 {%if desktop == "lxde" %}
-RUN apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
-        lxde gtk2-engines-murrine gnome-themes-standard gtk2-engines-pixbuf gtk2-engines-murrine arc-theme \
-    && apt autoclean -y \
-    && apt autoremove -y \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        lxde gtk2-engines-murrine gnome-themes-extra gtk2-engines-pixbuf arc-theme \
+    && apt-get autoclean -y \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
-{%endif%} 
+{%endif%}
 {%if desktop == "lxqt" %}
-RUN apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
-        lxqt openbox gtk2-engines-murrine gnome-themes-standard gtk2-engines-pixbuf arc-theme \
-    && apt autoclean -y \
-    && apt autoremove -y \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        lxqt openbox gtk2-engines-murrine gnome-themes-extra gtk2-engines-pixbuf arc-theme \
+    && apt-get autoclean -y \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
-{%endif%} 
+{%endif%}
 {%if desktop == "xfce4" %}
-RUN apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
-        xubuntu-desktop \
-    && apt autoclean -y \
-    && apt autoremove -y \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        xfce4 xfce4-terminal \
+    && apt-get autoclean -y \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
-{%endif%} 
+{%endif%}
 # Additional packages require ~600MB
 # libreoffice  pinta language-pack-zh-hant language-pack-gnome-zh-hant firefox-locale-zh-hant libreoffice-l10n-zh-tw
 
 # tini for subreap
-ARG TINI_VERSION=v0.18.0
+ARG TINI_VERSION=v0.19.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-{{arch}} /bin/tini
 RUN chmod +x /bin/tini
 
 # ffmpeg
-RUN apt update \
-    && apt install -y --no-install-recommends --allow-unauthenticated \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir /usr/local/ffmpeg \
-    && ln -s /usr/bin/ffmpeg /usr/local/ffmpeg/ffmpeg
-
+    && mkdir -p /usr/local/ffmpeg \
+    && ln -sf /usr/bin/ffmpeg /usr/local/ffmpeg/ffmpeg
 
 # python library
 COPY rootfs/usr/local/lib/web/backend/requirements.txt /tmp/
 RUN apt-get update \
     && dpkg-query -W -f='${Package}\n' > /tmp/a.txt \
-    && apt-get install -y python-pip python-dev build-essential \
-	&& pip install setuptools wheel && pip install -r /tmp/requirements.txt \
+    && apt-get install -y python3-pip python3-dev build-essential \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
+    && pip3 install --break-system-packages --ignore-installed setuptools wheel \
+    && pip3 install --break-system-packages --ignore-installed -r /tmp/requirements.txt \
     && dpkg-query -W -f='${Package}\n' > /tmp/b.txt \
     && apt-get remove -y `diff --changed-group-format='%>' --unchanged-group-format='' /tmp/a.txt /tmp/b.txt | xargs` \
     && apt-get autoclean -y \
@@ -97,28 +96,18 @@ RUN apt-get update \
 ################################################################################
 FROM {{image}} as builder
 
-{% if localbuild == 1 %}
-RUN sed -i 's#http://archive.ubuntu.com/ubuntu/#mirror://mirrors.ubuntu.com/mirrors.txt#' /etc/apt/sources.list; 
-{% endif %}
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates gnupg patch
 
 # nodejs
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash - \
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs
-
-# yarn
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
-    && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
-    && apt-get update \
-    && apt-get install -y yarn
 
 # build frontend
 COPY web /src/web
 RUN cd /src/web \
-    && yarn \
-    && yarn build
+    && npm install --legacy-peer-deps \
+    && npm run build
 
 {%if arch == "armhf"%}
 RUN cd /src/web/dist/static/novnc && patch -p0 < /src/web/novnc-armhf-1.patch
@@ -128,7 +117,7 @@ RUN cd /src/web/dist/static/novnc && patch -p0 < /src/web/novnc-armhf-1.patch
 # merge
 ################################################################################
 FROM system
-LABEL maintainer="fcwu.tw@gmail.com"
+LABEL maintainer="m4d3bug"
 
 COPY --from=builder /src/web/dist/ /usr/local/lib/web/frontend/
 COPY rootfs /
