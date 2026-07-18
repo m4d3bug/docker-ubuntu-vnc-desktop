@@ -1,7 +1,7 @@
 .PHONY: build run
 
 # Default values for variables
-REPO  ?= m4d3bug/ubuntu-desktop-lxde-vnc
+REPO  ?= ubuntu-desktop-lxde-vnc
 TAG   ?= latest
 # you can choose other base image versions
 IMAGE ?= ubuntu:24.04
