@@ -15,6 +15,7 @@ templates = Dockerfile rootfs/etc/supervisor/conf.d/supervisord.conf
 
 # Rebuild the container image
 build: $(templates)
+	git submodule update --init
 	docker build -t $(REPO):$(TAG) .
 
 # Test run the container
